@@ -47,6 +47,41 @@ from rdagent.utils.fmt import shrink_text
 from rdagent.utils.workflow import wait_retry
 
 
+def get_docker_client() -> docker.DockerClient:
+    """
+    Get a Docker client that works with various Docker installations including Docker Desktop and Colima.
+    
+    Returns:
+        docker.DockerClient: A Docker client instance
+    """
+    try:
+        # First try to connect using default method
+        client = docker.from_env()
+        # Test the connection
+        client.ping()
+        return client
+    except docker.errors.DockerException:
+        # If default fails, try common alternative paths (for Colima, etc.)
+        possible_sockets = [
+            os.path.expanduser("~/.colima/docker.sock"),
+            os.path.expanduser("~/.colima/default/docker.sock"),
+            "/var/run/docker.sock"
+        ]
+        
+        for socket_path in possible_sockets:
+            if os.path.exists(socket_path):
+                try:
+                    client = docker.DockerClient(base_url=f"unix://{socket_path}")
+                    # Test the connection
+                    client.ping()
+                    return client
+                except Exception:
+                    continue
+        
+        # If none of the paths worked, raise an exception
+        raise docker.errors.DockerException("Could not connect to Docker daemon")
+
+
 def cleanup_container(container: docker.models.containers.Container | None, context: str = "") -> None:  # type: ignore[no-any-unimported]
     """
     Shared helper function to clean up a Docker container.
@@ -775,7 +810,7 @@ class DockerEnv(Env[DockerConf]):
         """
         Download image if it doesn't exist
         """
-        client = docker.from_env()
+        client = get_docker_client()
         if (
             self.conf.build_from_dockerfile
             and self.conf.dockerfile_folder_path is not None
@@ -883,7 +918,7 @@ class DockerEnv(Env[DockerConf]):
         env["PYTHONWARNINGS"] = "ignore"
         env["TF_CPP_MIN_LOG_LEVEL"] = "2"
         env["PYTHONUNBUFFERED"] = "1"
-        client = docker.from_env()
+        client = get_docker_client()
 
         volumes = {}
         if local_path is not None:

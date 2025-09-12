@@ -57,7 +57,7 @@ def get_embedding_max_tokens(model: str) -> int:
     # Level 3: fallback to LLM_SETTINGS.embedding_max_length
     default_max_tokens = LLM_SETTINGS.embedding_max_length
     logger.warning(f"Unknown embedding model {model}, using default max_tokens={default_max_tokens}")
-    return default_max_tokens
+    return int(default_max_tokens)
 
 
 def trim_text_for_embedding(text: str, model: str, max_tokens: Optional[int] = None) -> str:

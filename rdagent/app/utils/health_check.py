@@ -10,13 +10,16 @@ from litellm.utils import ModelResponse
 from typing_extensions import Annotated
 
 from rdagent.log import rdagent_logger as logger
-from rdagent.utils.env import cleanup_container
+from rdagent.utils.env import cleanup_container, get_docker_client
 
 
 def check_docker_status() -> None:
     container = None
     try:
-        client = docker.from_env()
+        # Use the unified Docker client function
+        client = get_docker_client()
+        
+        # Test Docker functionality
         client.images.pull("hello-world")
         container = client.containers.run("hello-world", detach=True)
         logs = container.logs().decode("utf-8")

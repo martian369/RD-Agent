@@ -8,6 +8,7 @@ import requests
 from setuptools_scm import get_version
 
 from rdagent.log import rdagent_logger as logger
+from rdagent.utils.env import get_docker_client
 
 
 def sys_info():
@@ -31,21 +32,35 @@ def python_info():
 
 
 def docker_info():
-    client = docker.from_env()
-    containers = client.containers.list(all=True)
-    if containers:
-        containers.sort(key=lambda c: c.attrs["Created"])
-        last_container = containers[-1]
-        logger.info(f"Container ID: {last_container.id}")
-        logger.info(f"Container Name: {last_container.name}")
-        logger.info(f"Container Status: {last_container.status}")
-        logger.info(f"Image ID used by the container: {last_container.image.id}")
-        logger.info(f"Image tag used by the container: {last_container.image.tags}")
-        logger.info(f"Container port mapping: {last_container.ports}")
-        logger.info(f"Container Label: {last_container.labels}")
-        logger.info(f"Startup Commands: {' '.join(client.containers.get(last_container.id).attrs['Config']['Cmd'])}")
-    else:
-        logger.info(f"No run containers.")
+    try:
+        client = get_docker_client()
+        containers = client.containers.list(all=True)
+        if containers:
+            containers.sort(key=lambda c: c.attrs["Created"])
+            last_container = containers[-1]
+            logger.info(f"Container ID: {last_container.id}")
+            logger.info(f"Container Name: {last_container.name}")
+            logger.info(f"Container Status: {last_container.status}")
+            logger.info(f"Image ID used by the container: {last_container.image.id}")
+            logger.info(f"Image tag used by the container: {last_container.image.tags}")
+            logger.info(f"Container port mapping: {last_container.ports}")
+            logger.info(f"Container Label: {last_container.labels}")
+            # 获取容器的启动命令，如果不存在则显示N/A
+            container_attrs = client.containers.get(last_container.id).attrs
+            cmd = container_attrs.get('Config', {}).get('Cmd')
+            if cmd:
+                if isinstance(cmd, list):
+                    logger.info(f"Startup Commands: {' '.join(cmd)}")
+                else:
+                    logger.info(f"Startup Commands: {cmd}")
+            else:
+                logger.info("Startup Commands: N/A")
+        else:
+            logger.info(f"No run containers.")
+    except docker.errors.DockerException as e:
+        logger.error(f"Failed to connect to Docker: {e}")
+    except Exception as e:
+        logger.error(f"Error while getting Docker info: {e}")
 
 
 def rdagent_info():
@@ -84,3 +99,7 @@ def collect_info():
     docker_info()
     rdagent_info()
     return None
+
+
+if __name__ == "__main__":
+    collect_info()
