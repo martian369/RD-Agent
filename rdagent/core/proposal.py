@@ -1,4 +1,4 @@
-# TODO: remove `self.scen` if traces will be passed into the instance.
+# TODO: 如果 traces 将被传递到实例中，则移除 `self.scen`。
 
 from __future__ import annotations
 
@@ -23,10 +23,12 @@ if TYPE_CHECKING:
 
 class Hypothesis:
     """
-    TODO: We may have better name for it.
-
-    Name Candidates:
-    - Belief
+    假设类，表示一个可测试的假设或想法
+    
+    TODO: 我们可能有更好的名称。
+    
+    名称候选:
+    - Belief（信念）
     """
 
     def __init__(
@@ -38,6 +40,17 @@ class Hypothesis:
         concise_justification: str,
         concise_knowledge: str,
     ) -> None:
+        """
+        初始化假设对象
+        
+        Args:
+            hypothesis: 假设的描述
+            reason: 提出假设的原因
+            concise_reason: 简洁的原因说明
+            concise_observation: 简洁的观察结果
+            concise_justification: 简洁的论证
+            concise_knowledge: 简洁的知识总结
+        """
         self.hypothesis: str = hypothesis
         self.reason: str = reason
         self.concise_reason: str = concise_reason
@@ -46,16 +59,21 @@ class Hypothesis:
         self.concise_knowledge: str = concise_knowledge
 
     def __str__(self) -> str:
+        """返回假设的字符串表示"""
         return f"""Hypothesis: {self.hypothesis}
 Reason: {self.reason}"""
 
-    # source: data_ana | model_nan = None
+    # 来源: data_ana | model_nan = None
 
 
-# Origin(path of repo/data/feedback) => view/summarization => generated Hypothesis
+# 原始数据(仓库/数据/反馈路径) => 视图/总结 => 生成的假设
 
 
 class ExperimentFeedback(Feedback):
+    """
+    实验反馈类，表示对实验结果的反馈
+    """
+    
     def __init__(
         self,
         reason: str,
@@ -65,20 +83,32 @@ class ExperimentFeedback(Feedback):
         eda_improvement: str | None = None,
         exception: Exception | None = None,
     ) -> None:
+        """
+        初始化实验反馈对象
+        
+        Args:
+            reason: 反馈的原因
+            code_change_summary: 代码变更总结
+            decision: 决策结果（是否接受实验）
+            eda_improvement: EDA（探索性数据分析）改进建议
+            exception: 异常信息（如果实验失败）
+        """
         self.decision = decision
         self.eda_improvement = eda_improvement
         self.reason = reason
-        # Exception is not None means failing to generate runnable experiments due to exception.
-        # Runable reuslts are not always good.
+        # Exception 不为 None 表示由于异常而无法生成可运行的实验
+        # 可运行的结果并不总是好的
         self.exception: Exception | None = (
-            exception  # if the experiment raises exception, it will be integrated into part of the feedback.
+            exception  # 如果实验引发异常，它将被集成到反馈的一部分中
         )
         self.code_change_summary = code_change_summary
 
     def __bool__(self) -> bool:
+        """返回决策结果"""
         return self.decision
 
     def __str__(self) -> str:
+        """返回反馈的字符串表示"""
         res = f"Decision: {self.decision}\nReason: {self.reason}"
         code_change_summary = getattr(self, "code_change_summary", None)
         if code_change_summary is not None:
@@ -88,12 +118,22 @@ class ExperimentFeedback(Feedback):
     @classmethod
     def from_exception(cls, e: Exception) -> ExperimentFeedback:
         """
-        A convenient method to create Feedback from an exception.
+        从异常创建反馈的便捷方法
+        
+        Args:
+            e: 异常对象
+            
+        Returns:
+            ExperimentFeedback: 基于异常的反馈对象
         """
         return cls(decision=False, reason=f"The experiment fails due to {e!s}", exception=e)
 
 
 class HypothesisFeedback(ExperimentFeedback):
+    """
+    假设反馈类，继承自实验反馈，包含更多关于假设的反馈信息
+    """
+    
     def __init__(
         self,
         observations: str,
@@ -106,6 +146,19 @@ class HypothesisFeedback(ExperimentFeedback):
         eda_improvement: str | None = None,
         acceptable: bool | None = None,
     ) -> None:
+        """
+        初始化假设反馈对象
+        
+        Args:
+            observations: 观察结果
+            hypothesis_evaluation: 对假设的评估
+            new_hypothesis: 新的假设
+            reason: 反馈原因
+            code_change_summary: 代码变更总结
+            decision: 决策结果
+            eda_improvement: EDA改进建议
+            acceptable: 是否可接受
+        """
         super().__init__(
             reason,
             decision=decision,
@@ -118,6 +171,7 @@ class HypothesisFeedback(ExperimentFeedback):
         self.acceptable = acceptable
 
     def __str__(self) -> str:
+        """返回假设反馈的字符串表示"""
         return f"""{super().__str__()}
 Observations: {self.observations}
 Hypothesis Evaluation: {self.hypothesis_evaluation}
@@ -129,42 +183,63 @@ ASpecificKB = TypeVar("ASpecificKB", bound=KnowledgeBase)
 
 
 class Trace(Generic[ASpecificScen, ASpecificKB]):
-    NodeType = tuple[Experiment, ExperimentFeedback]  # Define NodeType as a new type representing the tuple
+    """
+    跟踪类，用于跟踪实验历史和决策过程
+    
+    这个类维护了一个实验和反馈的历史记录，以及它们之间的关系图结构。
+    """
+    
+    # 定义节点类型为包含实验和反馈的元组
+    NodeType = tuple[Experiment, ExperimentFeedback]
+    # 新根节点的表示
     NEW_ROOT: tuple = ()
 
     def __init__(self, scen: ASpecificScen, knowledge_base: ASpecificKB | None = None) -> None:
+        """
+        初始化跟踪对象
+        
+        Args:
+            scen: 场景对象
+            knowledge_base: 知识库对象
+        """
         self.scen: ASpecificScen = scen
 
-        # BEGIN: graph structure -------------------------
-        self.hist: list[Trace.NodeType] = (
-            []
-        )  # List of tuples containing experiments and their feedback, organized over time.
-        self.dag_parent: list[tuple[int, ...]] = []  # List of tuples representing parent indices in the DAG structure.
-        # Definition:
-        # - (,) represents no parent (root node in one tree);
-        # - (1,) presents one parent;
-        # - (1, 2) represents two parents (Multiple parent is not implemented yet).
-        # Syntax sugar for the parent relationship:
-        # - Only for selection:
-        #    - (-1,) indicates that select the last record node as parent.
+        # BEGIN: 图结构 -------------------------
+        # 包含实验和反馈的元组列表，按时间组织
+        self.hist: list[Trace.NodeType] = []
+        # 表示DAG结构中父节点索引的元组列表
+        self.dag_parent: list[tuple[int, ...]] = []
+        # 定义:
+        # - (,) 表示没有父节点（一棵树中的根节点）;
+        # - (1,) 表示一个父节点;
+        # - (1, 2) 表示两个父节点（尚未实现多父节点）。
+        # 父关系的语法糖:
+        # - 仅用于选择:
+        #    - (-1,) 表示选择最后一个记录节点作为父节点。
 
-        # NOTE: the sequence of hist and dag_parent is organized by the order to record the experiment.
-        # So it may be different from the order of the loop_id.
-        # So we need an extra mapping to map the enqueue id back to the loop id.
+        # 注意: hist 和 dag_parent 的顺序是按记录实验的顺序组织的。
+        # 所以它可能与 loop_id 的顺序不同。
+        # 所以我们需要一个额外的映射将排队ID映射回循环ID。
         self.idx2loop_id: dict[int, int] = {}
 
-        # Design discussion:
-        # - If we unifiy the loop_id and the enqueue id, we will have less recognition burden.
-        # - If we use different id for loop and enqueue, we don't have to handle the placeholder logic.
-        # END: graph structure -------------------------
+        # 设计讨论:
+        # - 如果我们统一 loop_id 和排队ID，我们将减少认知负担。
+        # - 如果我们对循环和排队使用不同的ID，我们就不必处理占位符逻辑。
+        # END: 图结构 -------------------------
 
-        # TODO: self.hist is 2-tuple now, remove hypothesis from it, change old code for this later.
+        # TODO: self.hist 现在是2元组，从其中移除假设，稍后更改旧代码。
         self.knowledge_base: ASpecificKB | None = knowledge_base
+        # 当前选择，默认为最新记录
         self.current_selection: tuple[int, ...] = (-1,)
 
     def get_sota_hypothesis_and_experiment(self) -> tuple[Hypothesis | None, Experiment | None]:
-        """Access the last experiment result, sub-task, and the corresponding hypothesis."""
-        # TODO: The return value does not align with the signature.
+        """
+        获取最新的成功假设和实验
+        
+        Returns:
+            tuple: 包含假设和实验的元组，如果没有找到则返回(None, None)
+        """
+        # TODO: 返回值与签名不一致。
         for experiment, feedback in self.hist[::-1]:
             if feedback.decision:
                 return experiment.hypothesis, experiment
@@ -173,8 +248,13 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
 
     def is_selection_new_tree(self, selection: tuple[int, ...] | None = None) -> bool:
         """
-        Check if the current trace is a new tree.
-        - selection maybe (-1,) when the dag_parent is empty.
+        检查当前跟踪是否为新树
+        
+        Args:
+            selection: 选择的节点索引元组
+            
+        Returns:
+            bool: 如果是新树则返回True，否则返回False
         """
         if selection is None:
             selection = self.get_current_selection()
@@ -182,9 +262,21 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
         return selection == self.NEW_ROOT or len(self.dag_parent) == 0
 
     def get_current_selection(self) -> tuple[int, ...]:
+        """
+        获取当前选择
+        
+        Returns:
+            tuple: 当前选择的节点索引元组
+        """
         return self.current_selection
 
     def set_current_selection(self, selection: tuple[int, ...]) -> None:
+        """
+        设置当前选择
+        
+        Args:
+            selection: 要设置的选择节点索引元组
+        """
         self.current_selection = selection
 
     def get_parent_exps(
@@ -192,8 +284,13 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
         selection: tuple[int, ...] | None = None,
     ) -> list[Trace.NodeType]:
         """
-        Collect all ancestors of the given selection.
-        The return list follows the order of [root->...->parent->current_node].
+        收集给定选择的所有祖先节点
+        
+        Args:
+            selection: 选择的节点索引元组
+            
+        Returns:
+            list: 按[根->...->父->当前节点]顺序排列的祖先节点列表
         """
         if selection is None:
             selection = self.get_current_selection()
@@ -204,10 +301,19 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
         return [self.hist[i] for i in self.get_parents(selection[0])]
 
     def exp2idx(self, exp: Experiment | list[Experiment]) -> int | list[int] | None:
+        """
+        将实验转换为索引
+        
+        Args:
+            exp: 实验对象或实验对象列表
+            
+        Returns:
+            int | list[int] | None: 实验对应的索引或索引列表
+        """
         if isinstance(exp, list):
             exps: list[Experiment] = exp
 
-            # keep the order
+            # 保持顺序
             exp_to_index: dict[Experiment, int] = {_exp: i for i, (_exp, _) in enumerate(self.hist)}
             return [exp_to_index[_exp] for _exp in exps]
         for i, (_exp, _) in enumerate(self.hist):
@@ -216,16 +322,44 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
         return None
 
     def idx2exp(self, idx: int | list[int]) -> Experiment | list[Experiment]:
+        """
+        将索引转换为实验
+        
+        Args:
+            idx: 索引或索引列表
+            
+        Returns:
+            Experiment | list[Experiment]: 索引对应的实验或实验列表
+        """
         if isinstance(idx, list):
             idxs: list[int] = idx
             return [self.hist[_idx][0] for _idx in idxs]
         return self.hist[idx][0]
 
     def is_parent(self, parent_idx: int, child_idx: int) -> bool:
+        """
+        检查一个节点是否为另一个节点的父节点
+        
+        Args:
+            parent_idx: 父节点索引
+            child_idx: 子节点索引
+            
+        Returns:
+            bool: 如果parent_idx是child_idx的父节点则返回True，否则返回False
+        """
         ancestors = self.get_parents(child_idx)
         return parent_idx in ancestors
 
     def get_parents(self, child_idx: int) -> list[int]:
+        """
+        获取一个节点的所有祖先节点
+        
+        Args:
+            child_idx: 子节点索引
+            
+        Returns:
+            list: 祖先节点索引列表
+        """
         if self.is_selection_new_tree((child_idx,)):
             return []
 
@@ -243,68 +377,100 @@ class Trace(Generic[ASpecificScen, ASpecificKB]):
 
 class CheckpointSelector:
     """
-    In the trace, we may start from any check point (we'll represent it as a variable `from_checkpoint_idx`)
+    检查点选择器类
+    
+    在跟踪中，我们可以从任何检查点开始（我们将用变量`from_checkpoint_idx`表示）
     """
 
     @abstractmethod
     def get_selection(self, trace: Trace) -> tuple[int, ...] | None:
         """
-        checkpoint_idx represents the place where we want to create a new node.
-        the return value should be the idx of target node (the parent of the new generating node).
-        - `(-1, )` represents starting from the latest trial in the trace - default value
+        获取选择的检查点
+        
+        checkpoint_idx 表示我们想要创建新节点的位置。
+        返回值应该是目标节点的索引（新生成节点的父节点）。
+        - `(-1, )` 表示从跟踪中的最新试验开始 - 默认值
 
-          - NOTE: we don't encourage to use this option; It is confusing when we have multiple traces.
+          - 注意: 我们不鼓励使用此选项; 当我们有多个跟踪时会令人困惑。
 
-        - `(idx, )` represents starting from the `idx`-th trial in the trace.
-        - `None` represents starting from scratch (start a new trace)
+        - `(idx, )` 表示从跟踪中的第`idx`个试验开始。
+        - `None` 表示从头开始（开始新的跟踪）
 
 
-        - More advanced selection strategies in `select.py`
+        - 更高级的选择策略在 `select.py` 中
         """
 
 
 class SOTAexpSelector:
     """
-    Select the SOTA experiment from the trace to submit
+    SOTA实验选择器类，用于从跟踪中选择SOTA实验进行提交
     """
 
     @abstractmethod
     def get_sota_exp_to_submit(self, trace: Trace) -> Experiment | None:
         """
-        Select the SOTA experiment from the trace to submit
+        从跟踪中选择SOTA实验进行提交
+        
+        Args:
+            trace: 跟踪对象
+            
+        Returns:
+            Experiment | None: 要提交的SOTA实验，如果没有则返回None
         """
 
 
 class ExpPlanner(ABC, Generic[ASpecificPlan]):
     """
-    An abstract class for planning the experiment.
-    The planner should generate a plan for the experiment based on the trace.
+    实验规划器抽象类
+    
+    规划器应基于跟踪生成实验计划。
     """
 
     def __init__(self, scen: Scenario) -> None:
+        """
+        初始化实验规划器
+        
+        Args:
+            scen: 场景对象
+        """
         self.scen = scen
 
     @abstractmethod
     def plan(self, trace: Trace) -> ASpecificPlan:
         """
-        Generate a plan for the experiment based on the trace.
-        The plan should be a dictionary that contains the plan to each stage.
+        基于跟踪生成实验计划
+        
+        Args:
+            trace: 跟踪对象
+            
+        Returns:
+            ASpecificPlan: 实验计划
         """
 
 
 class ExpGen(ABC):
+    """
+    实验生成器抽象类
+    """
 
     def __init__(self, scen: Scenario) -> None:
+        """
+        初始化实验生成器
+        
+        Args:
+            scen: 场景对象
+        """
         self.scen = scen
 
     @abstractmethod
     def gen(self, trace: Trace, plan: ExperimentPlan | None = None) -> Experiment:
         """
-        Generate the experiment based on the trace.
-        Planning is part of gen, but since we may support multi-stage planning,
-        we need to pass plan as optional argument.
+        基于跟踪生成实验
+        
+        规划是生成的一部分，但由于我们可能支持多阶段规划，
+        我们需要将计划作为可选参数传递。
 
-        `ExpGen().gen()` play a role like
+        `ExpGen().gen()` 的作用类似于
 
         .. code-block:: python
 
@@ -316,10 +482,17 @@ class ExpGen(ABC):
 
     async def async_gen(self, trace: Trace, loop: LoopBase) -> Experiment:
         """
-        generate the experiment and decide whether to stop yield generation and give up control to other routines.
+        异步生成实验，并决定是否停止生成并将控制权交给其他例程。
+        
+        Args:
+            trace: 跟踪对象
+            loop: 循环对象
+            
+        Returns:
+            Experiment: 生成的实验
         """
-        # we give a default implementation here.
-        # The proposal is set to try best to generate the experiment in max-parallel level.
+        # 我们在这里给出默认实现。
+        # 提案设置为尽力在最大并行级别生成实验。
         while True:
             if loop.get_unfinished_loop_cnt(loop.loop_idx) < RD_AGENT_SETTINGS.get_max_parallel():
                 return self.gen(trace)
@@ -327,8 +500,17 @@ class ExpGen(ABC):
 
 
 class HypothesisGen(ABC):
+    """
+    假设生成器抽象类
+    """
 
     def __init__(self, scen: Scenario) -> None:
+        """
+        初始化假设生成器
+        
+        Args:
+            scen: 场景对象
+        """
         self.scen = scen
 
     @abstractmethod
@@ -337,45 +519,75 @@ class HypothesisGen(ABC):
         trace: Trace,
         plan: ExperimentPlan | None = None,
     ) -> Hypothesis:
-        # def gen(self, scenario_desc: str, ) -> Hypothesis:
         """
-        Motivation of the variable `scenario_desc`:
-            - Mocking a data-scientist is observing the scenario.
+        基于跟踪生成假设
+        
+        变量 `scenario_desc` 的动机:
+            - 模拟数据科学家正在观察场景。
 
-        scenario_desc may include:
-            - data observation:
-                - Original or derivative
-            - Task information:
+        scenario_desc 可能包括:
+            - 数据观察:
+                - 原始或衍生
+            - 任务信息:
         """
 
 
 class Hypothesis2Experiment(ABC, Generic[ASpecificExp]):
     """
-    [Abstract description => concrete description] => Code implementation Card
+    假设到实验的转换器抽象类
+    
+    [抽象描述 => 具体描述] => 代码实现卡片
     """
 
     @abstractmethod
     def convert(self, hypothesis: Hypothesis, trace: Trace) -> ASpecificExp:
-        """Connect the idea proposal to implementation"""
+        """
+        将假设连接到实现
+        
+        Args:
+            hypothesis: 假设对象
+            trace: 跟踪对象
+            
+        Returns:
+            ASpecificExp: 转换后的具体实验
+        """
         ...
 
 
-# Boolean, Reason, Confidence, etc.
+# 布尔值, 原因, 置信度等
 
 
 class Experiment2Feedback(ABC):
-    """ "Generated feedbacks on the hypothesis from **Executed** Implementations of different tasks
-    & their comparisons with previous performances"""
+    """
+    实验到反馈的转换器抽象类
+    
+    从**已执行**的不同任务的实现中生成关于假设的反馈
+    & 与之前性能的比较
+    """
 
     def __init__(self, scen: Scenario) -> None:
+        """
+        初始化实验到反馈的转换器
+        
+        Args:
+            scen: 场景对象
+        """
         self.scen = scen
 
     @abstractmethod
     def generate_feedback(self, exp: Experiment, trace: Trace) -> ExperimentFeedback:
         """
-        The `exp` should be executed and the results should be included, as well as the comparison
-        between previous results (done by LLM).
-        For example: `mlflow` of Qlib will be included.
+        生成对假设的反馈
+        
+        `exp` 应该被执行，并且结果应该包括在内，以及与之前结果的比较（由LLM完成）。
+        例如: Qlib的`mlflow`将被包括在内。
+        
+        Args:
+            exp: 实验对象
+            trace: 跟踪对象
+            
+        Returns:
+            ExperimentFeedback: 生成的反馈
         """
         error_message = "generate_feedback method is not implemented."
         raise NotImplementedError(error_message)

@@ -8,7 +8,12 @@
 
 import subprocess
 
-latest_tag = subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"], text=True).strip()
+# 尝试获取最新的 Git 标签，如果失败则使用默认版本
+try:
+    latest_tag = subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"], text=True).strip()
+except (subprocess.CalledProcessError, FileNotFoundError):
+    # 如果无法获取标签，则使用默认版本号
+    latest_tag = "0.1.0"
 
 project = "RDAgent"
 copyright = "2024, Microsoft"

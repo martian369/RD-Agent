@@ -1,3 +1,17 @@
+"""
+RD-Agent Streamlit UI 应用
+
+这是一个基于 Streamlit 的可视化界面，用于展示 RD-Agent 的运行日志和实验结果。
+主要功能包括：
+1. 显示实验场景描述
+2. 展示研究假设和反馈
+3. 可视化指标变化
+4. 显示代码演化过程
+5. 提供任务完成情况分析
+
+作者：RD-Agent 团队
+"""
+
 import argparse
 import re
 import textwrap
@@ -36,23 +50,25 @@ from rdagent.scenarios.qlib.experiment.model_experiment import (
 )
 from rdagent.scenarios.qlib.experiment.quant_experiment import QlibQuantScenario
 
+# 设置Streamlit页面配置
 st.set_page_config(layout="wide", page_title="RD-Agent", page_icon="🎓", initial_sidebar_state="expanded")
 
 
-# 获取log_path参数
+# 获取命令行参数
 parser = argparse.ArgumentParser(description="RD-Agent Streamlit App")
-parser.add_argument("--log_dir", type=str, help="Path to the log directory")
-parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+parser.add_argument("--log_dir", type=str, help="日志目录路径")
+parser.add_argument("--debug", action="store_true", help="启用调试模式")
 args = parser.parse_args()
 if args.log_dir:
     main_log_path = Path(args.log_dir)
     if not main_log_path.exists():
-        st.error(f"Log dir `{main_log_path}` does not exist!")
+        st.error(f"日志目录 `{main_log_path}` 不存在!")
         st.stop()
 else:
     main_log_path = None
 
 
+# Qlib选定的指标
 QLIB_SELECTED_METRICS = [
     "IC",
     "1day.excess_return_with_cost.annualized_return",
@@ -60,6 +76,7 @@ QLIB_SELECTED_METRICS = [
     "1day.excess_return_with_cost.max_drawdown",
 ]
 
+# 相似的场景类型
 SIMILAR_SCENARIOS = (
     QlibModelScenario,
     QlibFactorScenario,
@@ -71,19 +88,30 @@ SIMILAR_SCENARIOS = (
 
 def filter_log_folders(main_log_path):
     """
-    Filter and return the log folders relative to the main log path.
+    过滤并返回相对于主日志路径的日志文件夹
+    
+    该函数用于筛选指定目录下的所有子目录，并按名称排序返回相对路径列表。
+    主要用于在UI中显示可用的日志目录供用户选择。
+    
+    Parameters:
+        main_log_path: 主日志路径
+        
+    Returns:
+        list: 排序后的日志文件夹列表
     """
     folders = [folder.relative_to(main_log_path) for folder in main_log_path.iterdir() if folder.is_dir()]
     folders = sorted(folders, key=lambda x: x.name)
     return folders
 
 
+# 初始化Streamlit会话状态
+# 会话状态用于在用户与应用交互时保持数据
 if "log_path" not in state:
     if main_log_path:
         state.log_path = filter_log_folders(main_log_path)[0]
     else:
         state.log_path = None
-        st.toast(":red[**Please Set Log Path!**]", icon="⚠️")
+        st.toast(":red[**请设置日志路径!**]", icon="⚠️")
 
 if "scenario" not in state:
     state.scenario = None
@@ -101,17 +129,17 @@ if "current_tags" not in state:
     state.current_tags = []
 
 if "lround" not in state:
-    state.lround = 0  # RD Loop Round
+    state.lround = 0  # RD循环轮次
 
 if "erounds" not in state:
-    state.erounds = defaultdict(int)  # Evolving Rounds in each RD Loop
+    state.erounds = defaultdict(int)  # 每个RD循环中的演化轮次
 
 if "e_decisions" not in state:
     state.e_decisions = defaultdict(lambda: defaultdict(tuple))
 
-# Summary Info
+# 摘要信息
 if "hypotheses" not in state:
-    # Hypotheses in each RD Loop
+    # 每个RD循环中的假设
     state.hypotheses = defaultdict(None)
 
 if "h_decisions" not in state:
@@ -123,12 +151,21 @@ if "metric_series" not in state:
 if "all_metric_series" not in state:
     state.all_metric_series = []
 
-# Factor Task Baseline
+# 因子任务基线
 if "alpha_baseline_metrics" not in state:
     state.alpha_baseline_metrics = None
 
 
 def should_display(msg: Message):
+    """
+    判断消息是否应该显示
+    
+    Parameters:
+        msg: 消息对象
+        
+    Returns:
+        bool: 是否应该显示
+    """
     for t in state.excluded_tags + ["debug_tpl", "debug_llm"]:
         if t in msg.tag.split("."):
             return False
@@ -140,6 +177,12 @@ def should_display(msg: Message):
 
 
 def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
+    """
+    获取消息直到满足结束条件
+    
+    Parameters:
+        end_func: 结束条件函数
+    """
     if state.fs:
         while True:
             try:
@@ -149,12 +192,12 @@ def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
                     if "hypothesis generation" in msg.tag:
                         state.lround += 1
 
-                    # new scenario gen this tags, old version UI not have these tags.
+                    # 新场景生成这些标签，旧版本UI没有这些标签
                     msg.tag = re.sub(r"\.evo_loop_\d+", "", msg.tag)
                     msg.tag = re.sub(r"Loop_\d+\.[^.]+", "", msg.tag)
                     msg.tag = re.sub(r"\.\.", ".", msg.tag)
 
-                    # remove old redundant tags
+                    # 移除旧的冗余标签
                     msg.tag = re.sub(r"init\.", "", msg.tag)
                     msg.tag = re.sub(r"r\.", "", msg.tag)
                     msg.tag = re.sub(r"d\.", "", msg.tag)
@@ -168,9 +211,9 @@ def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
                     state.current_tags = tags
                     state.last_msg = msg
 
-                    # Update Summary Info
+                    # 更新摘要信息
                     if "runner result" in tags:
-                        # factor baseline exp metrics
+                        # 因子基线实验指标
                         if (
                             isinstance(state.scenario, (QlibFactorScenario, QlibQuantScenario))
                             and state.alpha_baseline_metrics is None
@@ -204,7 +247,7 @@ def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
                                 state.metric_series.append(sms)
                                 state.all_metric_series.append(sms_all)
 
-                        # common metrics
+                        # 通用指标
                         try:
                             sms = msg.content.result
                         except AttributeError:
@@ -247,17 +290,23 @@ def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
 
                     state.msgs[state.lround][msg.tag].append(msg)
 
-                    # Stop Getting Logs
+                    # 停止获取日志
                     if end_func(msg):
                         break
             except StopIteration:
-                st.toast(":red[**No More Logs to Show!**]", icon="🛑")
+                st.toast(":red[**没有更多日志可显示!**]", icon="🛑")
                 break
 
 
 def refresh(same_trace: bool = False):
+    """
+    刷新日志数据
+    
+    Parameters:
+        same_trace: 是否使用相同轨迹
+    """
     if state.log_path is None:
-        st.toast(":red[**Please Set Log Path!**]", icon="⚠️")
+        st.toast(":red[**请设置日志路径!**]", icon="⚠️")
         return
 
     if main_log_path:
@@ -265,16 +314,16 @@ def refresh(same_trace: bool = False):
     else:
         state.fs = FileStorage(state.log_path).iter_msg()
 
-    # detect scenario
+    # 检测场景
     if not same_trace:
         get_msgs_until(lambda m: isinstance(m.content, Scenario))
         if state.last_msg is None or not isinstance(state.last_msg.content, Scenario):
             st.write(state.msgs)
-            st.toast(":red[**No Scenario Info detected**]", icon="❗")
+            st.toast(":red[**未检测到场景信息**]", icon="❗")
             state.scenario = None
         else:
             state.scenario = state.last_msg.content
-            st.toast(f":green[**Scenario Info detected**] *{type(state.scenario).__name__}*", icon="✅")
+            st.toast(f":green[**检测到场景信息**] *{type(state.scenario).__name__}*", icon="✅")
 
     state.msgs = defaultdict(lambda: defaultdict(list))
     state.lround = 0
@@ -290,9 +339,15 @@ def refresh(same_trace: bool = False):
 
 
 def evolving_feedback_window(wsf: FactorSingleFeedback | ModelSingleFeedback):
+    """
+    显示演化反馈窗口
+    
+    Parameters:
+        wsf: 因子或模型的单一反馈对象
+    """
     if isinstance(wsf, FactorSingleFeedback):
         ffc, efc, cfc, vfc = st.tabs(
-            ["**Final Feedback🏁**", "Execution Feedback🖥️", "Code Feedback📄", "Value Feedback🔢"]
+            ["**最终反馈🏁**", "执行反馈🖥️", "代码反馈📄", "数值反馈🔢"]
         )
         with ffc:
             st.markdown(wsf.final_feedback)
@@ -305,11 +360,11 @@ def evolving_feedback_window(wsf: FactorSingleFeedback | ModelSingleFeedback):
     elif isinstance(wsf, ModelSingleFeedback):
         ffc, efc, cfc, msfc, vfc = st.tabs(
             [
-                "**Final Feedback🏁**",
-                "Execution Feedback🖥️",
-                "Code Feedback📄",
-                "Model Shape Feedback📐",
-                "Value Feedback🔢",
+                "**最终反馈🏁**",
+                "执行反馈🖥️",
+                "代码反馈📄",
+                "模型形状反馈📐",
+                "数值反馈🔢",
             ]
         )
         with ffc:
@@ -325,11 +380,19 @@ def evolving_feedback_window(wsf: FactorSingleFeedback | ModelSingleFeedback):
 
 
 def display_hypotheses(hypotheses: dict[int, Hypothesis], decisions: dict[int, bool], success_only: bool = False):
+    """
+    显示假设信息
+    
+    Parameters:
+        hypotheses: 假设字典
+        decisions: 决策字典
+        success_only: 是否只显示成功的假设
+    """
     name_dict = {
-        "hypothesis": "RD-Agent proposes the hypothesis⬇️",
-        "concise_justification": "because the reason⬇️",
-        "concise_observation": "based on the observation⬇️",
-        "concise_knowledge": "Knowledge⬇️ gained after practice",
+        "hypothesis": "RD-Agent提出的假设⬇️",
+        "concise_justification": "因为原因⬇️",
+        "concise_observation": "基于观察⬇️",
+        "concise_knowledge": "实践后获得的知识⬇️",
     }
     if success_only:
         shd = {k: v.__dict__ for k, v in hypotheses.items() if decisions[k]}
@@ -368,6 +431,16 @@ def display_hypotheses(hypotheses: dict[int, Hypothesis], decisions: dict[int, b
 
 
 def metrics_window(df: pd.DataFrame, R: int, C: int, *, height: int = 300, colors: list[str] = None):
+    """
+    显示指标窗口
+    
+    Parameters:
+        df: 数据框
+        R: 行数
+        C: 列数
+        height: 图表高度
+        colors: 颜色列表
+    """
     fig = make_subplots(rows=R, cols=C, subplot_titles=df.columns)
 
     def hypothesis_hover_text(h: Hypothesis, d: bool = False):
@@ -395,7 +468,7 @@ def metrics_window(df: pd.DataFrame, R: int, C: int, *, height: int = 300, color
                 connectgaps=True,
                 marker=dict(size=10, color=colors[ci]) if colors else dict(size=10),
                 hovertext=hover_texts,
-                hovertemplate="%{hovertext}<br><br><span style='color: black'>%{x} Value:</span> <span style='color: blue'>%{y}</span><extra></extra>",
+                hovertemplate="%{hovertext}<br><br><span style='color: black'>%{x} 值:</span> <span style='color: blue'>%{y}</span><extra></extra>",
             ),
             row=row,
             col=col_num,
@@ -418,12 +491,15 @@ def metrics_window(df: pd.DataFrame, R: int, C: int, *, height: int = 300, color
     buffer = BytesIO()
     df.to_csv(buffer)
     buffer.seek(0)
-    st.download_button(label="download the metrics (csv)", data=buffer, file_name="metrics.csv", mime="text/csv")
+    st.download_button(label="下载指标 (csv)", data=buffer, file_name="metrics.csv", mime="text/csv")
 
 
 def summary_window():
+    """
+    显示摘要窗口
+    """
     if isinstance(state.scenario, SIMILAR_SCENARIOS):
-        st.header("Summary📊", divider="rainbow", anchor="_summary")
+        st.header("摘要📊", divider="rainbow", anchor="_summary")
         if state.lround == 0:
             return
         with st.container():
@@ -431,16 +507,16 @@ def summary_window():
             with st.container():
                 bc, cc = st.columns([2, 2], vertical_alignment="center")
                 with bc:
-                    st.subheader("Metrics📈", anchor="_metrics")
+                    st.subheader("指标📈", anchor="_metrics")
                 with cc:
-                    show_true_only = st.toggle("successful hypotheses", value=False)
+                    show_true_only = st.toggle("成功的假设", value=False)
 
             # hypotheses_c, chart_c = st.columns([2, 3])
             chart_c = st.container()
             hypotheses_c = st.container()
 
             with hypotheses_c:
-                st.subheader("Hypotheses🏅", anchor="_hypotheses")
+                st.subheader("假设🏅", anchor="_hypotheses")
                 display_hypotheses(state.hypotheses, state.h_decisions, show_true_only)
 
             with chart_c:
@@ -463,18 +539,18 @@ def summary_window():
                 elif df.shape[0] > 1:
                     if df.shape[1] == 1:
                         fig = px.line(df, x=df.index, y=df.columns, markers=True)
-                        fig.update_layout(xaxis_title="Loop Round", yaxis_title=None)
+                        fig.update_layout(xaxis_title="循环轮次", yaxis_title=None)
                         st.plotly_chart(fig)
                     else:
                         metrics_window(df, 1, 4, height=300, colors=["red", "blue", "orange", "green"])
 
     elif isinstance(state.scenario, GeneralModelScenario):
         with st.container(border=True):
-            st.subheader("Summary📊", divider="rainbow", anchor="_summary")
+            st.subheader("摘要📊", divider="rainbow", anchor="_summary")
             if len(state.msgs[state.lround]["evolving code"]) > 0:
                 # pass
                 ws: list[FactorFBWorkspace | ModelFBWorkspace] = state.msgs[state.lround]["evolving code"][-1].content
-                # All Tasks
+                # 所有任务
 
                 tab_names = [
                     w.target_task.factor_name if isinstance(w.target_task, FactorTask) else w.target_task.name
@@ -489,96 +565,108 @@ def summary_window():
                 wtabs = st.tabs(tab_names)
                 for j, w in enumerate(ws):
                     with wtabs[j]:
-                        # Evolving Code
+                        # 演化代码
                         for k, v in w.file_dict.items():
                             with st.expander(f":green[`{k}`]", expanded=False):
                                 st.code(v, language="python")
 
-                        # Evolving Feedback
+                        # 演化反馈
                         evolving_feedback_window(state.msgs[state.lround]["evolving feedback"][-1].content[j])
 
 
 def tabs_hint():
+    """
+    显示标签页提示
+    """
     st.markdown(
-        "<p style='font-size: small; color: #888888;'>You can navigate through the tabs using ⬅️ ➡️ or by holding Shift and scrolling with the mouse wheel🖱️.</p>",
+        "<p style='font-size: small; color: #888888;'>您可以使用 ⬅️ ➡️ 或按住Shift并用鼠标滚轮🖱️在标签页间导航。</p>",
         unsafe_allow_html=True,
     )
 
 
 def tasks_window(tasks: list[FactorTask | ModelTask]):
+    """
+    显示任务窗口
+    
+    Parameters:
+        tasks: 任务列表
+    """
     if isinstance(tasks[0], FactorTask):
-        st.markdown("**Factor Tasks🚩**")
+        st.markdown("**因子任务🚩**")
         tnames = [f.factor_name for f in tasks]
         if sum(len(tn) for tn in tnames) > 100:
             tabs_hint()
         tabs = st.tabs(tnames)
         for i, ft in enumerate(tasks):
             with tabs[i]:
-                # st.markdown(f"**Factor Name**: {ft.factor_name}")
-                st.markdown(f"**Description**: {ft.factor_description}")
-                st.latex("Formulation")
+                # st.markdown(f"**因子名称**: {ft.factor_name}")
+                st.markdown(f"**描述**: {ft.factor_description}")
+                st.latex("公式")
                 st.latex(ft.factor_formulation)
 
-                mks = "| Variable | Description |\n| --- | --- |\n"
+                mks = "| 变量 | 描述 |\n| --- | --- |\n"
                 if isinstance(ft.variables, dict):
                     for v, d in ft.variables.items():
                         mks += f"| ${v}$ | {d} |\n"
                     st.markdown(mks)
 
     elif isinstance(tasks[0], ModelTask):
-        st.markdown("**Model Tasks🚩**")
+        st.markdown("**模型任务🚩**")
         tnames = [m.name for m in tasks]
         if sum(len(tn) for tn in tnames) > 100:
             tabs_hint()
         tabs = st.tabs(tnames)
         for i, mt in enumerate(tasks):
             with tabs[i]:
-                # st.markdown(f"**Model Name**: {mt.name}")
-                st.markdown(f"**Model Type**: {mt.model_type}")
-                st.markdown(f"**Description**: {mt.description}")
-                st.latex("Formulation")
+                # st.markdown(f"**模型名称**: {mt.name}")
+                st.markdown(f"**模型类型**: {mt.model_type}")
+                st.markdown(f"**描述**: {mt.description}")
+                st.latex("公式")
                 st.latex(mt.formulation)
 
-                mks = "| Variable | Description |\n| --- | --- |\n"
+                mks = "| 变量 | 描述 |\n| --- | --- |\n"
                 if mt.variables:
                     for v, d in mt.variables.items():
                         mks += f"| ${v}$ | {d} |\n"
                     st.markdown(mks)
-                st.markdown(f"**Train Para**: {mt.training_hyperparameters}")
+                st.markdown(f"**训练参数**: {mt.training_hyperparameters}")
 
 
 def research_window():
+    """
+    显示研究窗口
+    """
     with st.container(border=True):
-        title = "Research🔍" if isinstance(state.scenario, SIMILAR_SCENARIOS) else "Research🔍 (reader)"
+        title = "研究🔍" if isinstance(state.scenario, SIMILAR_SCENARIOS) else "研究🔍 (阅读器)"
         st.subheader(title, divider="blue", anchor="_research")
         if isinstance(state.scenario, SIMILAR_SCENARIOS):
-            # pdf image
+            # pdf图像
             if pim := state.msgs[round]["load_pdf_screenshot"]:
                 for i in range(min(2, len(pim))):
                     st.image(pim[i].content, use_container_width=True)
 
-            # Hypothesis
+            # 假设
             if hg := state.msgs[round]["hypothesis generation"]:
-                st.markdown("**Hypothesis💡**")  # 🧠
+                st.markdown("**假设💡**")  # 🧠
                 h: Hypothesis = hg[0].content
                 st.markdown(
                     f"""
-- **Hypothesis**: {h.hypothesis}
-- **Reason**: {h.reason}"""
+- **假设**: {h.hypothesis}
+- **原因**: {h.reason}"""
                 )
 
             if eg := state.msgs[round]["experiment generation"]:
                 tasks_window(eg[0].content)
 
         elif isinstance(state.scenario, GeneralModelScenario):
-            # pdf image
+            # pdf图像
             c1, c2 = st.columns([2, 3])
             with c1:
                 if pim := state.msgs[0]["pdf_image"]:
                     for i in range(len(pim)):
                         st.image(pim[i].content, use_container_width=True)
 
-            # loaded model exp
+            # 加载的模型实验
             with c2:
                 if mem := state.msgs[0]["load_experiment"]:
                     me: QlibModelExperiment = mem[0].content
@@ -586,12 +674,15 @@ def research_window():
 
 
 def feedback_window():
+    """
+    显示反馈窗口
+    """
     # st.write(round)
-    # # Check if metric series exists and has the matching round
+    # # 检查指标序列是否存在且有匹配的轮次
     # if state.all_metric_series:
     #     for metric in state.all_metric_series:
     #         if metric.name == f"Round {round}":
-    #             # Select specific metrics with cost
+    #             # 选择特定的含成本指标
     #             selected_metrics_with_cost = {
     #                 'IC': float(f"{metric['IC']:.4f}"),
     #                 'ICIR': float(f"{metric['ICIR']:.4f}"),
@@ -602,10 +693,10 @@ def feedback_window():
     #                 'MDD': float(f"{metric['1day.excess_return_with_cost.max_drawdown']:.4f}"),
     #                 'Sharpe': float(f"{metric['1day.excess_return_with_cost.annualized_return'] / abs(metric['1day.excess_return_with_cost.max_drawdown']):.4f}")
     #             }
-    #             st.write("With Cost Metrics:")
+    #             st.write("含成本指标:")
     #             st.write(pd.Series(selected_metrics_with_cost))
 
-    #             # Select specific metrics without cost
+    #             # 选择特定的不含成本指标
     #             selected_metrics_without_cost = {
     #                 'IC': float(f"{metric['IC']:.4f}"),
     #                 'ICIR': float(f"{metric['ICIR']:.4f}"),
@@ -616,12 +707,12 @@ def feedback_window():
     #                 'MDD': float(f"{metric['1day.excess_return_without_cost.max_drawdown']:.4f}"),
     #                 'Sharpe': float(f"{metric['1day.excess_return_without_cost.annualized_return'] / abs(metric['1day.excess_return_without_cost.max_drawdown']):.4f}")
     #             }
-    #             st.write("Without Cost Metrics:")
+    #             st.write("不含成本指标:")
     #             st.write(pd.Series(selected_metrics_without_cost))
     #             break
     if isinstance(state.scenario, SIMILAR_SCENARIOS):
         with st.container(border=True):
-            st.subheader("Feedback📝", divider="orange", anchor="_feedback")
+            st.subheader("反馈📝", divider="orange", anchor="_feedback")
 
             if state.lround > 0 and isinstance(
                 state.scenario,
@@ -629,55 +720,58 @@ def feedback_window():
             ):
                 if fbr := state.msgs[round]["runner result"]:
                     try:
-                        st.write("workspace")
+                        st.write("工作空间")
                         st.write(fbr[0].content.experiment_workspace.workspace_path)
                         st.write(fbr[0].content.stdout)
                     except Exception as e:
-                        st.error(f"Error displaying workspace path: {str(e)}")
-                with st.expander("**Config⚙️**", expanded=True):
+                        st.error(f"显示工作空间路径时出错: {str(e)}")
+                with st.expander("**配置⚙️**", expanded=True):
                     st.markdown(state.scenario.experiment_setting, unsafe_allow_html=True)
 
             if fb := state.msgs[round]["feedback"]:
                 if fbr := state.msgs[round]["Quantitative Backtesting Chart"]:
-                    st.markdown("**Returns📈**")
+                    st.markdown("**收益📈**")
                     fig = report_figure(fbr[0].content)
                     st.plotly_chart(fig)
-                st.markdown("**Hypothesis Feedback🔍**")
+                st.markdown("**假设反馈🔍**")
                 h: HypothesisFeedback = fb[0].content
                 st.markdown(
                     f"""
-- **Observations**: {h.observations}
-- **Hypothesis Evaluation**: {h.hypothesis_evaluation}
-- **New Hypothesis**: {h.new_hypothesis}
-- **Decision**: {h.decision}
-- **Reason**: {h.reason}"""
+- **观察**: {h.observations}
+- **假设评估**: {h.hypothesis_evaluation}
+- **新假设**: {h.new_hypothesis}
+- **决策**: {h.decision}
+- **原因**: {h.reason}"""
                 )
 
             if isinstance(state.scenario, KGScenario):
                 if fbe := state.msgs[round]["runner result"]:
                     submission_path = fbe[0].content.experiment_workspace.workspace_path / "submission.csv"
                     st.markdown(
-                        f":green[**Exp Workspace**]: {str(fbe[0].content.experiment_workspace.workspace_path.absolute())}"
+                        f":green[**实验工作空间**]: {str(fbe[0].content.experiment_workspace.workspace_path.absolute())}"
                     )
                     try:
                         data = submission_path.read_bytes()
                         st.download_button(
-                            label="**Download** submission.csv",
+                            label="**下载** submission.csv",
                             data=data,
                             file_name="submission.csv",
                             mime="text/csv",
                         )
                     except Exception as e:
-                        st.markdown(f":red[**Download Button Error**]: {e}")
+                        st.markdown(f":red[**下载按钮错误**]: {e}")
 
 
 def evolving_window():
-    title = "Development🛠️" if isinstance(state.scenario, SIMILAR_SCENARIOS) else "Development🛠️ (evolving coder)"
+    """
+    显示演化窗口
+    """
+    title = "开发🛠️" if isinstance(state.scenario, SIMILAR_SCENARIOS) else "开发🛠️ (演化编码器)"
     st.subheader(title, divider="green", anchor="_development")
 
-    # Evolving Status
+    # 演化状态
     if state.erounds[round] > 0:
-        st.markdown("**☑️ Evolving Status**")
+        st.markdown("**☑️ 演化状态**")
         es = state.e_decisions[round]
         e_status_mks = "".join(f"| {ei} " for ei in range(1, state.erounds[round] + 1)) + "|\n"
         e_status_mks += "|--" * state.erounds[round] + "|\n"
@@ -688,11 +782,11 @@ def evolving_window():
         e_status_mks += "|\n"
         st.markdown(e_status_mks, unsafe_allow_html=True)
 
-    # Evolving Tabs
+    # 演化标签页
     if state.erounds[round] > 0:
         if state.erounds[round] > 1:
             evolving_round = st.radio(
-                "**🔄️Evolving Rounds**",
+                "**🔄️演化轮次**",
                 horizontal=True,
                 options=range(1, state.erounds[round] + 1),
                 index=state.erounds[round] - 1,
@@ -702,7 +796,7 @@ def evolving_window():
             evolving_round = 1
 
         ws: list[FactorFBWorkspace | ModelFBWorkspace] = state.msgs[round]["evolving code"][evolving_round - 1].content
-        # All Tasks
+        # 所有任务
 
         tab_names = [
             w.target_task.factor_name if isinstance(w.target_task, FactorTask) else w.target_task.name for w in ws
@@ -718,101 +812,101 @@ def evolving_window():
         wtabs = st.tabs(tab_names)
         for j, w in enumerate(ws):
             with wtabs[j]:
-                # Evolving Code
-                st.markdown(f"**Workspace Path**: {w.workspace_path}")
+                # 演化代码
+                st.markdown(f"**工作空间路径**: {w.workspace_path}")
                 for k, v in w.file_dict.items():
                     with st.expander(f":green[`{k}`]", expanded=True):
                         st.code(v, language="python")
 
-                # Evolving Feedback
+                # 演化反馈
                 if len(state.msgs[round]["evolving feedback"]) >= evolving_round:
                     evolving_feedback_window(state.msgs[round]["evolving feedback"][evolving_round - 1].content[j])
 
 
 toc = """
-## [Scenario Description📖](#_scenario)
-## [Summary📊](#_summary)
-- [**Metrics📈**](#_metrics)
-- [**Hypotheses🏅**](#_hypotheses)
-## [RD-Loops♾️](#_rdloops)
-- [**Research🔍**](#_research)
-- [**Development🛠️**](#_development)
-- [**Feedback📝**](#_feedback)
+## [场景描述📖](#_scenario)
+## [摘要📊](#_summary)
+- [**指标📈**](#_metrics)
+- [**假设🏅**](#_hypotheses)
+## [R&D循环♾️](#_rdloops)
+- [**研究🔍**](#_research)
+- [**开发🛠️**](#_development)
+- [**反馈📝**](#_feedback)
 """
 if isinstance(state.scenario, GeneralModelScenario):
     toc = """
-## [Scenario Description📖](#_scenario)
-### [Summary📊](#_summary)
-### [Research🔍](#_research)
-### [Development🛠️](#_development)
+## [场景描述📖](#_scenario)
+### [摘要📊](#_summary)
+### [研究🔍](#_research)
+### [开发🛠️](#_development)
 """
-# Config Sidebar
+# 配置侧边栏
 with st.sidebar:
     st.markdown("# RD-Agent🤖  [:grey[@GitHub]](https://github.com/microsoft/RD-Agent)")
-    st.subheader(":blue[Table of Content]", divider="blue")
+    st.subheader(":blue[目录]", divider="blue")
     st.markdown(toc)
-    st.subheader(":orange[Control Panel]", divider="red")
+    st.subheader(":orange[控制面板]", divider="red")
 
     with st.container(border=True):
         if main_log_path:
             lc1, lc2 = st.columns([1, 2], vertical_alignment="center")
             with lc1:
-                st.markdown(":blue[**Log Path**]")
+                st.markdown(":blue[**日志路径**]")
             with lc2:
-                manually = st.toggle("Manual Input")
+                manually = st.toggle("手动输入")
             if manually:
-                st.text_input("log path", key="log_path", on_change=refresh, label_visibility="collapsed")
+                st.text_input("日志路径", key="log_path", on_change=refresh, label_visibility="collapsed")
             else:
                 folders = filter_log_folders(main_log_path)
-                st.selectbox(f"**Select from `{main_log_path}`**", folders, key="log_path", on_change=refresh)
+                st.selectbox(f"**从 `{main_log_path}` 中选择**", folders, key="log_path", on_change=refresh)
         else:
-            st.text_input(":blue[**log path**]", key="log_path", on_change=refresh)
+            st.text_input(":blue[**日志路径**]", key="log_path", on_change=refresh)
 
     c1, c2 = st.columns([1, 1], vertical_alignment="center")
     with c1:
-        if st.button(":green[**All Loops**]", use_container_width=True):
+        if st.button(":green[**所有循环**]", use_container_width=True):
             if not state.fs:
                 refresh()
             get_msgs_until(lambda m: False)
-        if st.button("**Reset**", use_container_width=True):
+        if st.button("**重置**", use_container_width=True):
             refresh(same_trace=True)
     with c2:
-        if st.button(":green[Next Loop]", use_container_width=True):
+        if st.button(":green[下一循环]", use_container_width=True):
             if not state.fs:
                 refresh()
             get_msgs_until(lambda m: "feedback" in m.tag and "evolving feedback" not in m.tag)
 
-        if st.button("Next Step", use_container_width=True):
+        if st.button("下一步", use_container_width=True):
             if not state.fs:
                 refresh()
             get_msgs_until(lambda m: "evolving feedback" in m.tag)
 
-    with st.popover(":orange[**Config⚙️**]", use_container_width=True):
-        st.multiselect("excluded log tags", ["llm_messages"], ["llm_messages"], key="excluded_tags")
-        st.multiselect("excluded log types", ["str", "dict", "list"], ["str"], key="excluded_types")
+    with st.popover(":orange[**配置⚙️**]", use_container_width=True):
+        st.multiselect("排除的日志标签", ["llm_messages"], ["llm_messages"], key="excluded_tags")
+        st.multiselect("排除的日志类型", ["str", "dict", "list"], ["str"], key="excluded_types")
 
     if args.debug:
-        debug = st.toggle("debug", value=False)
+        debug = st.toggle("调试", value=False)
 
         if debug:
-            if st.button("Single Step Run", use_container_width=True):
+            if st.button("单步运行", use_container_width=True):
                 get_msgs_until()
     else:
         debug = False
 
 
-# Debug Info Window
+# 调试信息窗口
 if debug:
-    with st.expander(":red[**Debug Info**]", expanded=True):
+    with st.expander(":red[**调试信息**]", expanded=True):
         dcol1, dcol2 = st.columns([1, 3])
         with dcol1:
             st.markdown(
-                f"**log path**: {state.log_path}\n\n"
-                f"**excluded tags**: {state.excluded_tags}\n\n"
-                f"**excluded types**: {state.excluded_types}\n\n"
-                f":blue[**message id**]: {sum(sum(len(tmsgs) for tmsgs in rmsgs.values()) for rmsgs in state.msgs.values())}\n\n"
-                f":blue[**round**]: {state.lround}\n\n"
-                f":blue[**evolving round**]: {state.erounds[state.lround]}\n\n"
+                f"**日志路径**: {state.log_path}\n\n"
+                f"**排除标签**: {state.excluded_tags}\n\n"
+                f"**排除类型**: {state.excluded_types}\n\n"
+                f":blue[**消息ID**]: {sum(sum(len(tmsgs) for tmsgs in rmsgs.values()) for rmsgs in state.msgs.values())}\n\n"
+                f":blue[**轮次**]: {state.lround}\n\n"
+                f":blue[**演化轮次**]: {state.erounds[state.lround]}\n\n"
             )
         with dcol2:
             if state.last_msg:
@@ -830,7 +924,7 @@ if debug:
 if state.log_path and state.fs is None:
     refresh()
 
-# Main Window
+# 主窗口
 header_c1, header_c3 = st.columns([1, 6], vertical_alignment="center")
 with st.container():
     with header_c1:
@@ -839,20 +933,20 @@ with st.container():
         st.markdown(
             """
         <h1>
-            RD-Agent:<br>LLM-based autonomous evolving agents for industrial data-driven R&D
+            RD-Agent:<br>基于LLM的工业数据驱动R&D自主演化代理
         </h1>
         """,
             unsafe_allow_html=True,
         )
 
-# Project Info
+# 项目信息
 with st.container():
     image_c, scen_c = st.columns([3, 3], vertical_alignment="center")
     with image_c:
         img_path = rfiles("rdagent.log.ui").joinpath("flow.png")
         st.image(str(img_path), use_container_width=True)
     with scen_c:
-        st.header("Scenario Description📖", divider="violet", anchor="_scenario")
+        st.header("场景描述📖", divider="violet", anchor="_scenario")
         if state.scenario is not None:
             theme = st_theme()
             if theme:
@@ -868,38 +962,41 @@ with st.container():
 
 
 def analyze_task_completion():
-    st.header("Task Completion Analysis", divider="orange")
+    """
+    分析任务完成情况
+    """
+    st.header("任务完成情况分析", divider="orange")
 
-    # Dictionary to store results for all loops
+    # 存储所有循环结果的字典
     completion_stats = {}
 
-    # Iterate through all loops
+    # 遍历所有循环
     for loop_round in state.msgs.keys():
-        if loop_round == 0:  # Skip initialization round
+        if loop_round == 0:  # 跳过初始化循环
             continue
 
         max_evolving_round = state.erounds[loop_round]
         if max_evolving_round == 0:
             continue
 
-        # Track tasks that pass in each evolving round
+        # 跟踪每轮演化中通过的任务
         tasks_passed_by_round = {}
         cumulative_passed = set()
 
-        # For each evolving round in this loop
+        # 对于此循环中的每轮演化
         for e_round in range(1, max_evolving_round + 1):
             if len(state.msgs[loop_round]["evolving feedback"]) >= e_round:
-                # Get feedback for this evolving round
+                # 获取此演化轮次的反馈
                 feedback = state.msgs[loop_round]["evolving feedback"][e_round - 1].content
 
-                # Count passed tasks and track their indices
+                # 计算通过的任务并跟踪其索引
                 passed_tasks = set()
                 for j, task_feedback in enumerate(feedback):
                     if task_feedback.final_decision:
                         passed_tasks.add(j)
                         cumulative_passed.add(j)
 
-                # Store both individual round results and cumulative results
+                # 存储单轮结果和累积结果
                 tasks_passed_by_round[e_round] = {
                     "count": len(passed_tasks),
                     "indices": passed_tasks,
@@ -913,12 +1010,12 @@ def analyze_task_completion():
             "max_round": max_evolving_round,
         }
 
-    # Display results
+    # 显示结果
     if completion_stats:
-        # Add an aggregate view at the top
-        st.subheader("🔄 Aggregate Completion Across All Loops")
+        # 在顶部添加聚合视图
+        st.subheader("🔄 所有循环的聚合完成情况")
 
-        # Create summary data for comparison
+        # 创建用于比较的摘要数据
         summary_data = []
         total_tasks_across_loops = 0
         total_passed_r1 = 0
@@ -931,11 +1028,11 @@ def analyze_task_completion():
             total_tasks = stats["total_tasks"]
             total_tasks_across_loops += total_tasks
 
-            # Find data for specific rounds
+            # 查找特定轮次的数据
             r1_passed = stats["rounds"].get(1, {}).get("cumulative_count", 0)
             total_passed_r1 += r1_passed
 
-            # For round 3, use the closest round if exactly 3 doesn't exist
+            # 对于第3轮，如果不存在确切的3则使用最接近的轮次
             if 3 in stats["rounds"]:
                 r3_passed = stats["rounds"][3]["cumulative_count"]
             elif stats["max_round"] >= 3:
@@ -945,7 +1042,7 @@ def analyze_task_completion():
                 r3_passed = stats["rounds"][stats["max_round"]]["cumulative_count"] if stats["rounds"] else 0
             total_passed_r3 += r3_passed
 
-            # For round 5, use the closest round if exactly 5 doesn't exist
+            # 对于第5轮，如果不存在确切的5则使用最接近的轮次
             if 5 in stats["rounds"]:
                 r5_passed = stats["rounds"][5]["cumulative_count"]
             elif stats["max_round"] >= 5:
@@ -955,32 +1052,32 @@ def analyze_task_completion():
                 r5_passed = stats["rounds"][stats["max_round"]]["cumulative_count"] if stats["rounds"] else 0
             total_passed_r5 += r5_passed
 
-            # For round 10
+            # 对于第10轮
             if 10 in stats["rounds"]:
                 r10_passed = stats["rounds"][10]["cumulative_count"]
             else:
                 r10_passed = stats["rounds"][stats["max_round"]]["cumulative_count"] if stats["rounds"] else 0
             total_passed_r10 += r10_passed
 
-            # Final round completion
+            # 最终轮次完成情况
             final_passed = stats["rounds"][stats["max_round"]]["cumulative_count"] if stats["rounds"] else 0
             total_passed_final += final_passed
 
-            # Add to summary table
+            # 添加到摘要表
             summary_data.append(
                 {
-                    "Loop": f"Loop {loop_round}",
-                    "Total Tasks": total_tasks,
-                    "Passed (Round 1)": (
+                    "循环": f"循环 {loop_round}",
+                    "总任务数": total_tasks,
+                    "通过 (第1轮)": (
                         f"{r1_passed}/{total_tasks} ({r1_passed/total_tasks:.0%})" if total_tasks > 0 else "N/A"
                     ),
-                    "Passed (Round 3)": (
+                    "通过 (第3轮)": (
                         f"{r3_passed}/{total_tasks} ({r3_passed/total_tasks:.0%})" if total_tasks > 0 else "N/A"
                     ),
-                    "Passed (Round 5)": (
+                    "通过 (第5轮)": (
                         f"{r5_passed}/{total_tasks} ({r5_passed/total_tasks:.0%})" if total_tasks > 0 else "N/A"
                     ),
-                    "Passed (Final)": (
+                    "通过 (最终)": (
                         f"{final_passed}/{total_tasks} ({final_passed/total_tasks:.0%})" if total_tasks > 0 else "N/A"
                     ),
                 }
@@ -989,125 +1086,125 @@ def analyze_task_completion():
         if total_tasks_across_loops > 0:
             summary_data.append(
                 {
-                    "Loop": "**TOTAL**",
-                    "Total Tasks": total_tasks_across_loops,
-                    "Passed (Round 1)": f"**{total_passed_r1}/{total_tasks_across_loops} ({total_passed_r1/total_tasks_across_loops:.0%})**",
-                    "Passed (Round 3)": f"**{total_passed_r3}/{total_tasks_across_loops} ({total_passed_r3/total_tasks_across_loops:.0%})**",
-                    "Passed (Round 5)": f"**{total_passed_r5}/{total_tasks_across_loops} ({total_passed_r5/total_tasks_across_loops:.0%})**",
-                    "Passed (Final)": f"**{total_passed_final}/{total_tasks_across_loops} ({total_passed_final/total_tasks_across_loops:.0%})**",
+                    "循环": "**总计**",
+                    "总任务数": total_tasks_across_loops,
+                    "通过 (第1轮)": f"**{total_passed_r1}/{total_tasks_across_loops} ({total_passed_r1/total_tasks_across_loops:.0%})**",
+                    "通过 (第3轮)": f"**{total_passed_r3}/{total_tasks_across_loops} ({total_passed_r3/total_tasks_across_loops:.0%})**",
+                    "通过 (第5轮)": f"**{total_passed_r5}/{total_tasks_across_loops} ({total_passed_r5/total_tasks_across_loops:.0%})**",
+                    "通过 (最终)": f"**{total_passed_final}/{total_tasks_across_loops} ({total_passed_final/total_tasks_across_loops:.0%})**",
                 }
             )
 
         st.table(pd.DataFrame(summary_data))
 
-        # Summary statistics
-        st.markdown("### 📊 Overall Completion Progress:")
+        # 摘要统计
+        st.markdown("### 📊 整体完成进度:")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(
-                label="After Round 1",
+                label="第1轮后",
                 value=f"{total_passed_r1/total_tasks_across_loops:.0%}",
-                help=f"{total_passed_r1}/{total_tasks_across_loops} tasks",
+                help=f"{total_passed_r1}/{total_tasks_across_loops} 任务",
             )
         with col2:
             st.metric(
-                label="After Round 3",
+                label="第3轮后",
                 value=f"{total_passed_r3/total_tasks_across_loops:.0%}",
                 delta=f"{(total_passed_r3-total_passed_r1)/total_tasks_across_loops:.0%}",
-                help=f"{total_passed_r3}/{total_tasks_across_loops} tasks",
+                help=f"{total_passed_r3}/{total_tasks_across_loops} 任务",
             )
         with col3:
             st.metric(
-                label="After Round 5",
+                label="第5轮后",
                 value=f"{total_passed_r5/total_tasks_across_loops:.0%}",
                 delta=f"{(total_passed_r5-total_passed_r3)/total_tasks_across_loops:.0%}",
-                help=f"{total_passed_r5}/{total_tasks_across_loops} tasks",
+                help=f"{total_passed_r5}/{total_tasks_across_loops} 任务",
             )
         with col4:
             st.metric(
-                label="Final Completion",
+                label="最终完成",
                 value=f"{total_passed_final/total_tasks_across_loops:.0%}",
                 delta=f"{(total_passed_final-total_passed_r5)/total_tasks_across_loops:.0%}",
-                help=f"{total_passed_final}/{total_tasks_across_loops} tasks",
+                help=f"{total_passed_final}/{total_tasks_across_loops} 任务",
             )
 
-        # Show detailed results by loop
+        # 按循环显示详细结果
         st.markdown("---")
-        st.subheader("Detailed Results by Loop")
+        st.subheader("按循环的详细结果")
 
         for loop_round, stats in completion_stats.items():
-            with st.expander(f"Loop {loop_round} Details"):
+            with st.expander(f"循环 {loop_round} 详情"):
                 total_tasks = stats["total_tasks"]
 
-                # Create a results table
+                # 创建结果表
                 data = []
                 for e_round in range(1, min(11, stats["max_round"] + 1)):
                     if e_round in stats["rounds"]:
                         round_data = stats["rounds"][e_round]
                         data.append(
                             {
-                                "Evolving Round": e_round,
-                                "Tasks Passed": f"{round_data['count']}/{total_tasks} ({round_data['count']/total_tasks:.0%})",
-                                "Cumulative Passed": f"{round_data['cumulative_count']}/{total_tasks} ({round_data['cumulative_count']/total_tasks:.0%})",
+                                "演化轮次": e_round,
+                                "通过任务": f"{round_data['count']}/{total_tasks} ({round_data['count']/total_tasks:.0%})",
+                                "累积通过": f"{round_data['cumulative_count']}/{total_tasks} ({round_data['cumulative_count']/total_tasks:.0%})",
                             }
                         )
                     else:
-                        data.append({"Evolving Round": e_round, "Tasks Passed": "N/A", "Cumulative Passed": "N/A"})
+                        data.append({"演化轮次": e_round, "通过任务": "N/A", "累积通过": "N/A"})
 
                 df = pd.DataFrame(data)
                 st.table(df)
 
-                st.markdown("### Summary:")
+                st.markdown("### 摘要:")
                 if 1 in stats["rounds"]:
                     st.markdown(
-                        f"- After round 1: **{stats['rounds'][1]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][1]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第1轮后: **{stats['rounds'][1]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][1]['cumulative_count']/total_tasks:.0%})"
                     )
 
                 if 3 in stats["rounds"]:
                     st.markdown(
-                        f"- After round 3: **{stats['rounds'][3]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][3]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第3轮后: **{stats['rounds'][3]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][3]['cumulative_count']/total_tasks:.0%})"
                     )
                 elif stats["max_round"] >= 3:
                     max_round_below_3 = max([r for r in stats["rounds"].keys() if r <= 3])
                     st.markdown(
-                        f"- After round 3: **{stats['rounds'][max_round_below_3]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][max_round_below_3]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第3轮后: **{stats['rounds'][max_round_below_3]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][max_round_below_3]['cumulative_count']/total_tasks:.0%})"
                     )
 
                 if 5 in stats["rounds"]:
                     st.markdown(
-                        f"- After round 5: **{stats['rounds'][5]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][5]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第5轮后: **{stats['rounds'][5]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][5]['cumulative_count']/total_tasks:.0%})"
                     )
                 elif stats["max_round"] >= 5:
                     max_round_below_5 = max([r for r in stats["rounds"].keys() if r <= 5])
                     st.markdown(
-                        f"- After round 5: **{stats['rounds'][max_round_below_5]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][max_round_below_5]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第5轮后: **{stats['rounds'][max_round_below_5]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][max_round_below_5]['cumulative_count']/total_tasks:.0%})"
                     )
 
                 if 10 in stats["rounds"]:
                     st.markdown(
-                        f"- After round 10: **{stats['rounds'][10]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][10]['cumulative_count']/total_tasks:.0%})"
+                        f"- 第10轮后: **{stats['rounds'][10]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][10]['cumulative_count']/total_tasks:.0%})"
                     )
                 elif stats["max_round"] >= 1:
                     st.markdown(
-                        f"- After final round ({stats['max_round']}): **{stats['rounds'][stats['max_round']]['cumulative_count']}/{total_tasks}** tasks passed ({stats['rounds'][stats['max_round']]['cumulative_count']/total_tasks:.0%})"
+                        f"- 最终轮次 ({stats['max_round']}): **{stats['rounds'][stats['max_round']]['cumulative_count']}/{total_tasks}** 任务通过 ({stats['rounds'][stats['max_round']]['cumulative_count']/total_tasks:.0%})"
                     )
     else:
-        st.info("No task completion data available.")
+        st.info("没有任务完成数据可用。")
 
 
 if state.scenario is not None:
     summary_window()
-    if st.toggle("show analyse_task_competition"):
+    if st.toggle("显示任务完成情况分析"):
         analyze_task_completion()
 
-    # R&D Loops Window
+    # R&D循环窗口
     if isinstance(state.scenario, SIMILAR_SCENARIOS):
-        st.header("R&D Loops♾️", divider="rainbow", anchor="_rdloops")
+        st.header("R&D循环♾️", divider="rainbow", anchor="_rdloops")
         if len(state.msgs) > 1:
             r_options = list(state.msgs.keys())
             if 0 in r_options:
                 r_options.remove(0)
-            round = st.radio("**Loops**", horizontal=True, options=r_options, index=state.lround - 1)
+            round = st.radio("**循环**", horizontal=True, options=r_options, index=state.lround - 1)
         else:
             round = 1
 
@@ -1118,7 +1215,7 @@ if state.scenario is not None:
         d_c = st.container()
         round = 0
     else:
-        st.error("Unknown Scenario!")
+        st.error("未知场景!")
         st.stop()
 
     with rf_c:
@@ -1130,8 +1227,8 @@ if state.scenario is not None:
 
 
 st.markdown("<br><br><br>", unsafe_allow_html=True)
-st.markdown("#### Disclaimer")
+st.markdown("#### 免责声明")
 st.markdown(
-    "*This content is AI-generated and may not be fully accurate or up-to-date; please verify with a professional for critical matters.*",
+    "*此内容由AI生成，可能不完全准确或不是最新的；对于关键事项，请与专业人士核实。*",
     unsafe_allow_html=True,
 )
