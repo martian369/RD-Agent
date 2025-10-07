@@ -155,6 +155,13 @@ if "all_metric_series" not in state:
 if "alpha_baseline_metrics" not in state:
     state.alpha_baseline_metrics = None
 
+# 排除标签和类型
+if "excluded_tags" not in state:
+    state.excluded_tags = ["llm_messages"]  # 默认排除llm_messages标签
+
+if "excluded_types" not in state:
+    state.excluded_types = []
+
 
 def should_display(msg: Message):
     """
@@ -529,10 +536,10 @@ def summary_window():
                 if show_true_only and len(state.hypotheses) >= len(state.metric_series):
                     if state.alpha_baseline_metrics is not None:
                         selected = ["Alpha Base"] + [
-                            i for i in df.index if i == "Baseline" or state.h_decisions[int(i[6:])]
+                            i for i in df.index if i == "Baseline" or (i.startswith("Round ") and state.h_decisions[int(i[6:])])
                         ]
                     else:
-                        selected = [i for i in df.index if i == "Baseline" or state.h_decisions[int(i[6:])]]
+                        selected = [i for i in df.index if i == "Baseline" or (i.startswith("Round ") and state.h_decisions[int(i[6:])])]
                     df = df.loc[selected]
                 if df.shape[0] == 1:
                     st.table(df.iloc[0])
@@ -1204,7 +1211,15 @@ if state.scenario is not None:
             r_options = list(state.msgs.keys())
             if 0 in r_options:
                 r_options.remove(0)
-            round = st.radio("**循环**", horizontal=True, options=r_options, index=state.lround - 1)
+            # 确保r_options不为空且index有效
+            if r_options and state.lround - 1 >= 0 and state.lround - 1 < len(r_options):
+                round = st.radio("**循环**", horizontal=True, options=r_options, index=state.lround - 1)
+            elif r_options:
+                # 如果index无效但有选项，使用默认index 0
+                round = st.radio("**循环**", horizontal=True, options=r_options, index=0)
+            else:
+                # 如果没有选项，使用默认值1
+                round = 1
         else:
             round = 1
 

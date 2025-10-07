@@ -7,12 +7,12 @@ import pandas as pd
 from jinja2 import Environment, StrictUndefined
 
 from rdagent.components.coder.factor_coder.config import FACTOR_COSTEER_SETTINGS
-from rdagent.utils.env import QTDockerEnv
+from rdagent.utils.env import Env, QlibCondaConf, QlibCondaEnv, QTDockerEnv
 
 
 def generate_data_folder_from_qlib():
     template_path = Path(__file__).parent / "factor_data_template"
-    qtde = QTDockerEnv()
+    qtde  = QlibCondaEnv(conf=QlibCondaConf())
     qtde.prepare()
 
     # Run the Qlib backtest

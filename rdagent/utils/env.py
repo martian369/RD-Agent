@@ -47,7 +47,7 @@ from rdagent.utils import filter_redundant_text
 from rdagent.utils.agent.tpl import T
 from rdagent.utils.fmt import shrink_text
 from rdagent.utils.workflow import wait_retry
-
+import platform
 
 def get_docker_client() -> docker.DockerClient:
     """
@@ -405,7 +405,7 @@ class Env(Generic[ASpecificEnvConf]):
             chmod_cmd = f"{find_cmd} -exec chmod -R 777 {{}} +"
             return chmod_cmd
 
-        if self.conf.running_timeout_period is None:
+        if self.conf.running_timeout_period is None or platform.system() == "Darwin":
             timeout_cmd = entry
         else:
             timeout_cmd = f"timeout --kill-after=10 {self.conf.running_timeout_period} {entry}"
@@ -831,7 +831,7 @@ class QlibCondaConf(CondaConf):
     
     用于 Qlib Conda 环境的配置设置
     """
-    conda_env_name: str = "rdagent4qlib"  # Conda 环境名称
+    conda_env_name: str = "py311"  # Conda 环境名称
     enable_cache: bool = False  # 是否启用缓存
     default_entry: str = "qrun conf.yaml"  # 默认入口点
     # extra_volumes: dict = {str(Path("~/.qlib/").expanduser().resolve().absolute()): "/root/.qlib/"}

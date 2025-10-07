@@ -87,9 +87,10 @@ class MultiProcessEvolvingStrategy(EvolvingStrategy):
             if target_task_desc in queried_knowledge.success_task_to_knowledge_dict:
                 # NOTE: very weird logic:
                 # it depends on the knowledge to set the already finished task
-                code_list[index] = queried_knowledge.success_task_to_knowledge_dict[
+
+                code_list[index] = list(queried_knowledge.success_task_to_knowledge_dict[
                     target_task_desc
-                ].implementation.file_dict
+                ].implementation.file_dict.values())[0]
             elif (
                 target_task_desc not in queried_knowledge.success_task_to_knowledge_dict
                 and target_task_desc not in queried_knowledge.failed_task_info_set
