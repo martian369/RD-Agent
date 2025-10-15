@@ -1,25 +1,16 @@
-# TODO: The maintainer of this repo has not yet edited this file
+rdagent/app/qlib_rd_loop/quant.py  
+入口
+QuantRDLoop  初始化及每个步骤
 
-**REPO OWNER**: Do you want Customer Service & Support (CSS) support for this product/project?
+rdagent/utils/workflow/loop.py
+主管循环
 
-- **No CSS support:** Fill out this template with information about how to file issues and get help.
-- **Yes CSS support:** Fill out an intake form at [aka.ms/onboardsupport](https://aka.ms/onboardsupport). CSS will work with/help you to determine next steps.
-- **Not sure?** Fill out an intake as though the answer were "Yes". CSS will help you decide.
+rdagent/components/coder/CoSTEER/knowledge_management.py
+CoSTEERKnowledgeBaseV2  知识库
 
-*Then remove this first heading from this SUPPORT.MD file before publishing your repo.*
+rdagent/components/proposal/__init__.py
+LLMHypothesisGen  生成假设
+Hypothesis2Experiment - LLMHypothesis2Experiment — FactorHypothesis2Experiment - QlibFactorHypothesis2Experiment 假设转实验描述
 
-# Support
-
-## How to file issues and get help  
-
-This project uses GitHub Issues to track bugs and feature requests. Please search the existing 
-issues before filing new issues to avoid duplicates.  For new issues, file your bug or 
-feature request as a new Issue.
-
-For help and questions about using this project, please **REPO MAINTAINER: INSERT INSTRUCTIONS HERE 
-FOR HOW TO ENGAGE REPO OWNERS OR COMMUNITY FOR HELP. COULD BE A STACK OVERFLOW TAG OR OTHER
-CHANNEL. WHERE WILL YOU HELP PEOPLE?**.
-
-## Microsoft Support Policy  
-
-Support for this **PROJECT or PRODUCT** is limited to the resources listed above.
+rdagent/components/coder/CoSTEER/__init__.py
+Developer - CoSTEER - FactorCoSTEER - 

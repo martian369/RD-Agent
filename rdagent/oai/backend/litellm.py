@@ -51,7 +51,7 @@ class LiteLLMAPIBackend(APIBackend):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if not self.__class__._has_logged_settings:
-            logger.info(f"{LITELLM_SETTINGS}")
+            # logger.info(f"{LITELLM_SETTINGS}")
             logger.log_object(LITELLM_SETTINGS.model_dump(), tag="LITELLM_SETTINGS")
             self.__class__._has_logged_settings = True
         super().__init__(*args, **kwargs)
@@ -194,7 +194,7 @@ class LiteLLMAPIBackend(APIBackend):
         try:
             cost = completion_cost(model=model, messages=messages, completion=content)
         except Exception as e:
-            logger.warning(f"Cost calculation failed for model {model}: {e}. Skip cost statistics.")
+            # logger.warning(f"Cost calculation failed for model {model}: {e}. Skip cost statistics.")
             cost = np.nan
         else:
             ACC_COST += cost

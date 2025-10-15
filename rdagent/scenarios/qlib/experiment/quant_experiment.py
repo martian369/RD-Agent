@@ -249,7 +249,7 @@ class QlibQuantScenario(Scenario):
             Returns:
                 str: 通用描述
             """
-            return f"""\n------场景背景------
+            return f"""\n------Background of the scenario------
 {self.background(action)}
 ------The source dataset you can use------
 {self.get_source_data_desc()}
