@@ -338,15 +338,15 @@ class QlibQuantScenario(Scenario):
 
         if tag is None or tag == "factor":
             # 使用因子环境获取运行时环境
-            factor_env = get_factor_env()
-            factor_stdout = get_runtime_environment_by_env(env=factor_env)
+            # factor_env = get_factor_env()
+            factor_stdout = get_runtime_environment_by_env()
             if tag == "factor":
                 stdout = factor_stdout
 
         if tag is None or tag == "model":
             # 使用模型环境获取运行时环境
-            model_env = get_model_env()
-            model_stdout = get_runtime_environment_by_env(env=model_env)
+            # model_env = get_model_env()
+            model_stdout = get_runtime_environment_by_env()
             if tag == "model":
                 stdout = model_stdout
 

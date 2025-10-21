@@ -17,6 +17,16 @@ def get_runtime_environment_by_env(env: Env) -> str:
     combined_info = runtime_info + "\n" + gpu_info
     return combined_info
 
+@lru_cache(maxsize=1)
+def get_runtime_environment_by_env() -> str:
+    # Get runtime info and GPU info
+    runtime_info = print_runtime_info()
+    gpu_info = get_gpu_info()
+    
+    # Combine all info
+    combined_info = runtime_info + "\n" + gpu_info
+    return combined_info
+
 def print_runtime_info() -> str:
     """
     获取Python运行时信息字符串

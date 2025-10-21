@@ -9,6 +9,7 @@ from rdagent.core.experiment import Task, Workspace
 from rdagent.oai.llm_conf import LLM_SETTINGS
 from rdagent.oai.llm_utils import APIBackend
 from rdagent.utils.agent.tpl import T
+from rdagent.log import rdagent_logger as logger
 
 
 # This shape evaluator is also used in data_science
@@ -92,12 +93,12 @@ class ModelCodeEvaluator(CoSTEEREvaluator):
                 execution_feedback_to_render = execution_feedback_to_render[len(execution_feedback_to_render) // 2 :]
             else:
                 break
-
-        critic_response = APIBackend().build_messages_and_create_chat_completion(
-            user_prompt=user_prompt,
-            system_prompt=system_prompt,
-            json_mode=False,
-        )
+        with logger.tag(f"coding"):
+            critic_response = APIBackend().build_messages_and_create_chat_completion(
+                user_prompt=user_prompt,
+                system_prompt=system_prompt,
+                json_mode=False,
+            )
 
         return critic_response, None
 

@@ -85,6 +85,6 @@ The simulator user can use to test your factor:
 """
 
     def get_runtime_environment(self):
-        factor_env = get_factor_env()
-        stdout = get_runtime_environment_by_env(env=factor_env)
+        # factor_env = get_factor_env()
+        stdout = get_runtime_environment_by_env()
         return stdout

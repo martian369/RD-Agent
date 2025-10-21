@@ -34,7 +34,7 @@ def process_factor_data(exp_or_list: List[QlibFactorExperiment] | QlibFactorExpe
                 # Iterate over sub-implementations and execute them to get each factor data
                 message_and_df_list = multiprocessing_wrapper(
                     [
-                        (implementation.execute, ("All",))
+                        (implementation.execute, ("Debug",)) # All
                         for implementation, fb in zip(exp.sub_workspace_list, exp.prop_dev_feedback)
                         if implementation and fb
                     ],  # only execute successfully feedback

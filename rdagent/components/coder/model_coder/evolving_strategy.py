@@ -15,6 +15,7 @@ from rdagent.core.experiment import FBWorkspace
 from rdagent.oai.llm_conf import LLM_SETTINGS
 from rdagent.oai.llm_utils import APIBackend
 from rdagent.utils.agent.tpl import T
+from rdagent.log import rdagent_logger as logger
 
 
 class ModelMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
@@ -69,14 +70,15 @@ class ModelMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
             elif len(queried_similar_successful_knowledge_to_render) > 1:
                 queried_similar_successful_knowledge_to_render = queried_similar_successful_knowledge_to_render[1:]
 
-        code = json.loads(
-            APIBackend(use_chat_cache=CoSTEER_SETTINGS.coder_use_cache).build_messages_and_create_chat_completion(
-                user_prompt=user_prompt,
-                system_prompt=system_prompt,
-                json_mode=True,
-                json_target_type=Dict[str, str],
-            ),
-        )["code"]
+        with logger.tag(f"coding"):
+            code = json.loads(
+                APIBackend(use_chat_cache=CoSTEER_SETTINGS.coder_use_cache).build_messages_and_create_chat_completion(
+                    user_prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    json_mode=True,
+                    json_target_type=Dict[str, str],
+                ),
+            )["code"]
         return code
 
     def assign_code_list_to_evo(self, code_list, evo):
